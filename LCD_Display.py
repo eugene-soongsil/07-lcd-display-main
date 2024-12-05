@@ -31,6 +31,7 @@ def gpio_read(pin):
     with open(value_path, 'r') as f:
         return f.read().strip()
 
+# LCD Pin Definitions
 LCD_RS = 117  
 LCD_E  = 121  
 LCD_D4 = 114  
@@ -118,17 +119,23 @@ def lcd_string(message, line):
     for i in range(LCD_WIDTH):
         lcd_byte(ord(message[i]), LCD_CHR)
 
+def get_current_time():
+    # Get current time in HH:MM:SS format
+    return time.strftime("%H:%M:%S", time.localtime())
+
 # main
 if __name__ == "__main__":
     try:
         lcd_init()
         while True:
-            lcd_string("Hello, World!", LCD_LINE_1)
-            lcd_string("Line 2 here", LCD_LINE_2)
-            time.sleep(3)
-            lcd_string("LCD Test", LCD_LINE_1)
-            lcd_string("Goodbye!", LCD_LINE_2)
-            time.sleep(3)
+            # Get current time
+            current_time = get_current_time()
+
+            # Display time on the LCD (Line 1: Hour/Minute, Line 2: Second)
+            lcd_string(current_time[:5], LCD_LINE_1)  # HH:MM
+            lcd_string(current_time[6:], LCD_LINE_2)  # SS
+
+            time.sleep(1)  # Update every second
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
     finally:
