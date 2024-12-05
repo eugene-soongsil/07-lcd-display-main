@@ -1,5 +1,6 @@
 import os
 import time
+import smbus
 
 # GPIO path
 GPIO_BASE_PATH = "/sys/class/gpio"
@@ -35,15 +36,15 @@ def gpio_read(pin):
 LCD_RS = 117  
 LCD_E  = 121  
 LCD_D4 = 114  
-LCD_D5 = 113  
-LCD_D6 = 112  
+LCD_D5 = 113   
+LCD_D6 = 112   
 LCD_D7 = 61  
 
 LCD_WIDTH = 16  
 LCD_CHR = "1"
 LCD_CMD = "0"
 
-LCD_LINE_1 = 0x80 
+LCD_LINE_1 = 0x80  
 LCD_LINE_2 = 0xC0 
 
 E_PULSE = 0.0005
@@ -120,24 +121,47 @@ def lcd_string(message, line):
         lcd_byte(ord(message[i]), LCD_CHR)
 
 def get_current_time():
-    # Get current time in HH:MM:SS format
-    return time.strftime("%H:%M:%S", time.localtime())
+    # Get current time in HH:MM format
+    return time.strftime("%H:%M", time.localtime())
 
-# main
+def read_adc(channel):
+    bus.write_byte(PCF8591_ADDRESS, 0x40 | channel)
+    bus.read_byte(PCF8591_ADDRESS)
+    value = bus.read_byte(PCF8591_ADDRESS)
+    return value
+
+def convert_to_temperature(adc_value):
+    voltage = (adc_value / 255.0) * VREF
+    temperature = voltage * TEMP_CONVERSION_FACTOR
+    return temperature
+
+# Main program
 if __name__ == "__main__":
+    bus = smbus.SMBus(1)  
+    PCF8591_ADDRESS = 0x48
+    AIN_CHANNEL = 0
+    VREF = 3.3
+    TEMP_CONVERSION_FACTOR = 100.0
+
     try:
         lcd_init()
         while True:
             # Get current time
             current_time = get_current_time()
 
-            # Display time on the LCD (Line 1: Hour/Minute, Line 2: Second)
-            lcd_string(current_time[:5], LCD_LINE_1)  # HH:MM
-            lcd_string(current_time[6:], LCD_LINE_2)  # SS
+            # Read temperature from ADC
+            adc_value = read_adc(AIN_CHANNEL)
+            temperature = convert_to_temperature(adc_value)
+
+            # Display time and temperature on the LCD
+            lcd_string(f"Time: {current_time}", LCD_LINE_1)  # Display time on line 1
+            lcd_string(f"Temp: {temperature:.2f} C", LCD_LINE_2)  # Display temperature on line 2
 
             time.sleep(1)  # Update every second
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
+    except Exception as e:
+        print(f"An error occurred: {e}")
     finally:
         gpio_unexport(LCD_E)
         gpio_unexport(LCD_RS)
@@ -145,3 +169,4 @@ if __name__ == "__main__":
         gpio_unexport(LCD_D5)
         gpio_unexport(LCD_D6)
         gpio_unexport(LCD_D7)
+        bus.close()
