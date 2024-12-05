@@ -121,8 +121,8 @@ def lcd_string(message, line):
         lcd_byte(ord(message[i]), LCD_CHR)
 
 def get_current_time():
-    # Get current time in HH:MM format
-    return time.strftime("%H:%M", time.localtime())
+    # Get current time in HH:MM:SS format
+    return time.strftime("%H:%M:%S", time.localtime())
 
 def read_adc(channel):
     bus.write_byte(PCF8591_ADDRESS, 0x40 | channel)
@@ -146,15 +146,15 @@ if __name__ == "__main__":
     try:
         lcd_init()
         while True:
-            # Get current time
+            # Get current time with seconds included
             current_time = get_current_time()
 
             # Read temperature from ADC
             adc_value = read_adc(AIN_CHANNEL)
             temperature = convert_to_temperature(adc_value)
 
-            # Display time and temperature on the LCD
-            lcd_string(f"Time: {current_time}", LCD_LINE_1)  # Display time on line 1
+            # Display time (with seconds) and temperature on the LCD
+            lcd_string(f"Time: {current_time}", LCD_LINE_1)  # Display time (HH:MM:SS) on line 1
             lcd_string(f"Temp: {temperature:.2f} C", LCD_LINE_2)  # Display temperature on line 2
 
             time.sleep(1)  # Update every second
