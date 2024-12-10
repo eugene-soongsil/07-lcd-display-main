@@ -1,6 +1,6 @@
 import os
 import time
-import Adafruit_DHT
+import pigpio
 
 # GPIO path
 GPIO_BASE_PATH = "/sys/class/gpio"
@@ -32,7 +32,7 @@ def gpio_read(pin):
     with open(value_path, 'r') as f:
         return f.read().strip()
 
-# LCD Pin Definitions
+# Define LCD function
 LCD_RS = 117  
 LCD_E  = 121  
 LCD_D4 = 114  
@@ -121,31 +121,38 @@ def lcd_string(message, line):
         lcd_byte(ord(message[i]), LCD_CHR)
 
 def get_current_time():
-    # Get current time in HH:MM:SS format
     return time.strftime("%H:%M:%S", time.localtime())
 
-# Main program
+def read_dht11(pi, gpio_pin):
+    sensor = pi.read_DHT(gpio_pin)
+    if sensor['valid']:
+        return sensor['humidity'], sensor['temperature']
+    return None, None
+
 if __name__ == "__main__":
-    DHT_SENSOR = Adafruit_DHT.DHT11  # DHT11 센서를 사용
-    DHT_PIN = 4  # GPIO 핀 번호
+    DHT_PIN = 4  # DHT11 데이터 핀(GPIO 핀 번호)
+    pi = pigpio.pi()
 
     try:
         lcd_init()
         while True:
-            # 현재 시간 가져오기
+            # 현재 시간
             current_time = get_current_time()
 
-            # DHT 센서에서 온도와 습도 읽기
-            humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+            # DHT11 센서에서 온도와 습도 읽기
+            humidity, temperature = read_dht11(pi, DHT_PIN)
 
             if humidity is not None and temperature is not None:
-                # LCD에 시간과 온습도 표시
+                print(f"Time: {current_time}, Temp: {temperature:.1f}C, Humidity: {humidity:.1f}%")
+
+                # LCD 출력
                 lcd_string(f"Time: {current_time}", LCD_LINE_1)
                 lcd_string(f"T:{temperature:.1f}C H:{humidity:.1f}%", LCD_LINE_2)
             else:
+                print("Failed to read from sensor!")
                 lcd_string("Sensor Error!", LCD_LINE_1)
 
-            time.sleep(2)  # 2초마다 갱신
+            time.sleep(2)  # 2초 대기
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
     except Exception as e:
@@ -157,3 +164,4 @@ if __name__ == "__main__":
         gpio_unexport(LCD_D5)
         gpio_unexport(LCD_D6)
         gpio_unexport(LCD_D7)
+        pi.stop()
