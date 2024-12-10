@@ -1,6 +1,6 @@
 import os
 import time
-import smbus
+import Adafruit_DHT
 
 # GPIO path
 GPIO_BASE_PATH = "/sys/class/gpio"
@@ -124,40 +124,28 @@ def get_current_time():
     # Get current time in HH:MM:SS format
     return time.strftime("%H:%M:%S", time.localtime())
 
-def read_adc(channel):
-    bus.write_byte(PCF8591_ADDRESS, 0x40 | channel)
-    bus.read_byte(PCF8591_ADDRESS)
-    value = bus.read_byte(PCF8591_ADDRESS)
-    return value
-
-def convert_to_temperature(adc_value):
-    voltage = (adc_value / 255.0) * VREF
-    temperature = voltage * TEMP_CONVERSION_FACTOR
-    return temperature
-
 # Main program
 if __name__ == "__main__":
-    bus = smbus.SMBus(1)  
-    PCF8591_ADDRESS = 0x48
-    AIN_CHANNEL = 0
-    VREF = 3.3
-    TEMP_CONVERSION_FACTOR = 100.0
+    DHT_SENSOR = Adafruit_DHT.DHT11  # DHT11 센서를 사용
+    DHT_PIN = 4  # GPIO 핀 번호
 
     try:
         lcd_init()
         while True:
-            # Get current time with seconds included
+            # 현재 시간 가져오기
             current_time = get_current_time()
 
-            # Read temperature from ADC
-            adc_value = read_adc(AIN_CHANNEL)
-            temperature = convert_to_temperature(adc_value)
+            # DHT 센서에서 온도와 습도 읽기
+            humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
 
-            # Display time (with seconds) and temperature on the LCD
-            lcd_string(f"Time: {current_time}", LCD_LINE_1)  # Display time (HH:MM:SS) on line 1
-            lcd_string(f"Temp: {temperature:.2f} C", LCD_LINE_2)  # Display temperature on line 2
+            if humidity is not None and temperature is not None:
+                # LCD에 시간과 온습도 표시
+                lcd_string(f"Time: {current_time}", LCD_LINE_1)
+                lcd_string(f"T:{temperature:.1f}C H:{humidity:.1f}%", LCD_LINE_2)
+            else:
+                lcd_string("Sensor Error!", LCD_LINE_1)
 
-            time.sleep(1)  # Update every second
+            time.sleep(2)  # 2초마다 갱신
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
     except Exception as e:
@@ -169,4 +157,3 @@ if __name__ == "__main__":
         gpio_unexport(LCD_D5)
         gpio_unexport(LCD_D6)
         gpio_unexport(LCD_D7)
-        bus.close()
