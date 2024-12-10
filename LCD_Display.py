@@ -1,6 +1,5 @@
 import os
 import time
-import pigpio
 
 # GPIO path
 GPIO_BASE_PATH = "/sys/class/gpio"
@@ -30,7 +29,7 @@ def gpio_write(pin, value):
 def gpio_read(pin):
     value_path = os.path.join(GPIO_BASE_PATH, f"gpio{pin}", "value")
     with open(value_path, 'r') as f:
-        return f.read().strip()
+        return int(f.read().strip())
 
 # Define LCD function
 LCD_RS = 117  
@@ -39,6 +38,7 @@ LCD_D4 = 114
 LCD_D5 = 113   
 LCD_D6 = 112   
 LCD_D7 = 61  
+DHT_PIN = 4  # DHT11 데이터 핀
 
 LCD_WIDTH = 16  
 LCD_CHR = "1"
@@ -120,39 +120,45 @@ def lcd_string(message, line):
     for i in range(LCD_WIDTH):
         lcd_byte(ord(message[i]), LCD_CHR)
 
-def get_current_time():
-    return time.strftime("%H:%M:%S", time.localtime())
+def read_dht11():
+    """DHT11 센서에서 온도와 습도 읽기"""
+    # DHT11 초기화
+    gpio_set_direction(DHT_PIN, "out")
+    gpio_write(DHT_PIN, 0)
+    time.sleep(0.018)  # 최소 18ms 동안 신호를 Low로 유지
+    gpio_write(DHT_PIN, 1)
+    gpio_set_direction(DHT_PIN, "in")
 
-def read_dht11(pi, gpio_pin):
-    sensor = pi.read_DHT(gpio_pin)
-    if sensor['valid']:
-        return sensor['humidity'], sensor['temperature']
-    return None, None
+    # 데이터 수집
+    data = []
+    for _ in range(500):
+        data.append(gpio_read(DHT_PIN))
+
+    # 데이터 처리
+    bits = []
+    count = 0
+    for value in data:
+        count += 1
+        if value == 0 and count > 5:
+            bits.append(count)
+            count = 0
+
+    # 온도 및 습도 계산
+    humidity = bits[0]
+    temperature = bits[2]
+    return humidity, temperature
+
 
 if __name__ == "__main__":
-    DHT_PIN = 4  # DHT11 데이터 핀(GPIO 핀 번호)
-    pi = pigpio.pi()
-
     try:
         lcd_init()
+        gpio_export(DHT_PIN)
         while True:
-            # 현재 시간
-            current_time = get_current_time()
-
-            # DHT11 센서에서 온도와 습도 읽기
-            humidity, temperature = read_dht11(pi, DHT_PIN)
-
-            if humidity is not None and temperature is not None:
-                print(f"Time: {current_time}, Temp: {temperature:.1f}C, Humidity: {humidity:.1f}%")
-
-                # LCD 출력
-                lcd_string(f"Time: {current_time}", LCD_LINE_1)
-                lcd_string(f"T:{temperature:.1f}C H:{humidity:.1f}%", LCD_LINE_2)
-            else:
-                print("Failed to read from sensor!")
-                lcd_string("Sensor Error!", LCD_LINE_1)
-
-            time.sleep(2)  # 2초 대기
+            humidity, temperature = read_dht11()
+            print(f"Temperature: {temperature}°C, Humidity: {humidity}%")
+            lcd_string("Temp & Humidity", LCD_LINE_1)
+            lcd_string(f"T:{temperature}C H:{humidity}%", LCD_LINE_2)
+            time.sleep(2)
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
     except Exception as e:
@@ -164,4 +170,4 @@ if __name__ == "__main__":
         gpio_unexport(LCD_D5)
         gpio_unexport(LCD_D6)
         gpio_unexport(LCD_D7)
-        pi.stop()
+        gpio_unexport(DHT_PIN)
