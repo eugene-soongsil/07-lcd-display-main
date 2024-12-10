@@ -134,7 +134,7 @@ def read_dht11():
     for _ in range(500):
         data.append(gpio_read(DHT_PIN))
 
-    # 데이터 처리
+    # 데이터 처리 (타이밍에 따라 데이터 해석 필요)
     bits = []
     count = 0
     for value in data:
@@ -144,9 +144,17 @@ def read_dht11():
             count = 0
 
     # 온도 및 습도 계산
-    humidity = bits[0]
-    temperature = bits[2]
-    return humidity, temperature
+    if len(bits) >= 40:
+        humidity = bits[0]
+        temperature = bits[2]
+        return humidity, temperature
+    else:
+        return None, None
+
+
+def get_current_time():
+    """현재 시간 반환"""
+    return time.strftime("%H:%M:%S", time.localtime())
 
 
 if __name__ == "__main__":
@@ -154,11 +162,18 @@ if __name__ == "__main__":
         lcd_init()
         gpio_export(DHT_PIN)
         while True:
+            current_time = get_current_time()
             humidity, temperature = read_dht11()
-            print(f"Temperature: {temperature}°C, Humidity: {humidity}%")
-            lcd_string("Temp & Humidity", LCD_LINE_1)
-            lcd_string(f"T:{temperature}C H:{humidity}%", LCD_LINE_2)
-            time.sleep(2)
+
+            if humidity is not None and temperature is not None:
+                lcd_string(f"Time: {current_time}", LCD_LINE_1)
+                lcd_string(f"T:{temperature}C H:{humidity}%", LCD_LINE_2)
+                print(f"Time: {current_time}, Temp: {temperature}°C, Humidity: {humidity}%")
+            else:
+                lcd_string(f"Time: {current_time}", LCD_LINE_1)
+                lcd_string("Sensor Error!", LCD_LINE_2)
+
+            time.sleep(1)
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
     except Exception as e:
