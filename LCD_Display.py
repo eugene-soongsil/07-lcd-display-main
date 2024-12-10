@@ -1,5 +1,6 @@
 import os
 import time
+import smbus
 
 # GPIO path
 GPIO_BASE_PATH = "/sys/class/gpio"
@@ -29,16 +30,15 @@ def gpio_write(pin, value):
 def gpio_read(pin):
     value_path = os.path.join(GPIO_BASE_PATH, f"gpio{pin}", "value")
     with open(value_path, 'r') as f:
-        return int(f.read().strip())
+        return f.read().strip()
 
-# Define LCD function
+# LCD Pin Definitions
 LCD_RS = 117  
 LCD_E  = 121  
 LCD_D4 = 114  
 LCD_D5 = 113   
 LCD_D6 = 112   
 LCD_D7 = 61  
-DHT_PIN = 4  # DHT11 데이터 핀
 
 LCD_WIDTH = 16  
 LCD_CHR = "1"
@@ -120,60 +120,44 @@ def lcd_string(message, line):
     for i in range(LCD_WIDTH):
         lcd_byte(ord(message[i]), LCD_CHR)
 
-def read_dht11():
-    """DHT11 센서에서 온도와 습도 읽기"""
-    # DHT11 초기화
-    gpio_set_direction(DHT_PIN, "out")
-    gpio_write(DHT_PIN, 0)
-    time.sleep(0.018)  # 최소 18ms 동안 신호를 Low로 유지
-    gpio_write(DHT_PIN, 1)
-    gpio_set_direction(DHT_PIN, "in")
-
-    # 데이터 수집
-    data = []
-    for _ in range(500):
-        data.append(gpio_read(DHT_PIN))
-
-    # 데이터 처리 (타이밍에 따라 데이터 해석 필요)
-    bits = []
-    count = 0
-    for value in data:
-        count += 1
-        if value == 0 and count > 5:
-            bits.append(count)
-            count = 0
-
-    # 온도 및 습도 계산
-    if len(bits) >= 40:
-        humidity = bits[0]
-        temperature = bits[2]
-        return humidity, temperature
-    else:
-        return None, None
-
-
 def get_current_time():
-    """현재 시간 반환"""
+    # Get current time in HH:MM:SS format
     return time.strftime("%H:%M:%S", time.localtime())
 
+def read_adc(channel):
+    bus.write_byte(PCF8591_ADDRESS, 0x40 | channel)
+    bus.read_byte(PCF8591_ADDRESS)
+    value = bus.read_byte(PCF8591_ADDRESS)
+    return value
 
+def convert_to_temperature(adc_value):
+    voltage = (adc_value / 255.0) * VREF
+    temperature = voltage * TEMP_CONVERSION_FACTOR
+    return temperature
+
+# Main program
 if __name__ == "__main__":
+    bus = smbus.SMBus(1)  
+    PCF8591_ADDRESS = 0x48
+    AIN_CHANNEL = 0
+    VREF = 3.3
+    TEMP_CONVERSION_FACTOR = 100.0
+
     try:
         lcd_init()
-        gpio_export(DHT_PIN)
         while True:
+            # Get current time with seconds included
             current_time = get_current_time()
-            humidity, temperature = read_dht11()
 
-            if humidity is not None and temperature is not None:
-                lcd_string(f"Time: {current_time}", LCD_LINE_1)
-                lcd_string(f"T:{temperature}C H:{humidity}%", LCD_LINE_2)
-                print(f"Time: {current_time}, Temp: {temperature}°C, Humidity: {humidity}%")
-            else:
-                lcd_string(f"Time: {current_time}", LCD_LINE_1)
-                lcd_string("Sensor Error!", LCD_LINE_2)
+            # Read temperature from ADC
+            adc_value = read_adc(AIN_CHANNEL)
+            temperature = convert_to_temperature(adc_value)
 
-            time.sleep(1)
+            # Display time (with seconds) and temperature on the LCD
+            lcd_string(f"Time: {current_time}", LCD_LINE_1)  # Display time (HH:MM:SS) on line 1
+            lcd_string(f"Temp: {temperature:.2f} C", LCD_LINE_2)  # Display temperature on line 2
+
+            time.sleep(1)  # Update every second
     except KeyboardInterrupt:
         print("\nProgram stopped by User")
     except Exception as e:
@@ -185,4 +169,4 @@ if __name__ == "__main__":
         gpio_unexport(LCD_D5)
         gpio_unexport(LCD_D6)
         gpio_unexport(LCD_D7)
-        gpio_unexport(DHT_PIN)
+        bus.close()
